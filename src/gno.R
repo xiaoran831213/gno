@@ -1,47 +1,54 @@
 source('src/utl.R')
-GNO<-new.env();
-gno <- function(x)
+
+gnomic <- function(x)
 {
     if(!is.list(x))
         x <- readRDS(as.character(x))
-    structure(x, class = c('gno', 'list'))
+    structure(x, class = c('gnomic', 'list'))
 }
 
-maf.gno <- function(obj, level = 2L)
+maf.gnomic <- function(obj, level = 2L)
 {
     rowMeans(obj$gmx, na.rm = T) / level
 }
 
-## make missing values in genotype matrix
-GNO$mkMis<-function(gmx, frq, val=NA)
+maf.matrix <- function(gmx, margin = 2L, level = 2L)
+{
+    f <- if(margin == 1L) rowMeans else colMeans
+    f(gmx, na.rm = T) / level
+}
+
+maf.vector <- function(gvt, level = 2L)
+{
+    mean(gvt, na.rm = T) / level
+}
+
+## randomly make missing values in genotype matrix
+mkMis.matrix<-function(gmx, frq, val=NA)
 {
     gmx[sample(x=c(T,F), size=length(gmx), replace=T, prob=c(frq,1-frq))]<-val;
     gmx;
 }
 
-## get genotype counts, only works for biallelic dosage data for now.
-GNO$cnt <- function(gmx)
+stt.vector <- function(gvt, lvl = 2L)
 {
-    if(!is.matrix(gmx))
-        stop('genotype must be a matrix')
-    
-    M <- nrow(gmx); # number of variants (features of a subject)
-    N <- ncol(gmx); # number of subjects
-    ## get value statistics for all variants
-    hdr <- c('N0', 'N1', 'N2', 'NN', 'NV')
-    stt <- matrix(0L, nrow = M, ncol = 5L, dimnames = list(NULL, hdr))
-    for(i in 1L:M)
-    {
-        g <- gmx[i, ]                     # the i th. variant
-        n0 <- sum(g == 0L, na.rm = T)     # 1.Homo-major
-        n1 <- sum(g == 1L, na.rm = T)     # 2.Hete
-        n2 <- sum(g == 2L, na.rm = T)     # 3.Homo-minor
-        nn <- sum(is.na(g))               # 4.missing
-        nv <- N - nn - max(n0, n1, n2)    # 5.net variation
-        ## write down
-        stt[i, ] <- c(n0, n1, n2, nn, nv) 
-    }
-    stt
+    n0 <- sum(g == 0L, na.rm = T)     # 1.Homo-major
+    n1 <- sum(g == 1L, na.rm = T)     # 2.Hete
+    n2 <- sum(g == 2L, na.rm = T)     # 3.Homo-minor
+    nn <- sum(is.na(g))               # 4.missing
+    nv <- N - nn - max(n0, n1, n2)    # 5.net variation
+    ## write down
+    c(n0, n1, n2, nn, nv) 
+}
+## get genotype counts, only works for biallelic dosage data for now.
+stt.matrix <- function(gmx, mrg = 2L)
+{
+    stt <- apply(gmx, mrg, stt.vector)
+    dnm <- dimnames(gmx)
+    vid <- if(is.na(dnm)) NULL else dnm[mrg]
+    dimnames(stt) <- list(
+        itm=list('N0', 'N1', 'N2', 'NN', 'NV'),
+        vid=vid)
 }
 
 ## remove degenerated variants
@@ -63,7 +70,7 @@ GNO$clr.dgr<-function(gmx)
 }
 
 ## fix variants whoes MAF is greater than 0.5 by flipping their coding
-GNO$fix.maf <- function(gmx, ret.idx = F)
+fix.maf <- function(gmx, ret.idx = F)
 {
     if(!is.matrix(gmx))
         stop('genotype must be a matrix')
@@ -82,10 +89,10 @@ GNO$fix.maf <- function(gmx, ret.idx = F)
 }
 
 ## guess missing values based on the frequency of know values
-GNO$imp<-function(gmx)
+imp<-function(gmx)
 {
     ## calculate genotype count
-    cnt<-GNO$cnt(gmx);
+    cnt<-stt(gmx);
 
     idx <- which(cnt[, 'NN'] > 0L)
     # guess missings for a variant, maintain type frequency
@@ -353,7 +360,7 @@ seg.gno <- function(
     sum(ret)
 }
 
-GNO$pic<-function(gfx, mrg=1L, pos=NULL, xlim=NULL, ylim=NULL, out=NULL, ...)
+pic<-function(gfx, mrg=1L, pos=NULL, xlim=NULL, ylim=NULL, out=NULL, ...)
 {
     pardefault <- par(no.readonly = T) # save plot settings
     if(!is.null(out))
@@ -363,7 +370,7 @@ GNO$pic<-function(gfx, mrg=1L, pos=NULL, xlim=NULL, ylim=NULL, out=NULL, ...)
 
     if(is.null(pos))
     {
-        pos<-GNO$sdp(1L:dim(gfx)[mrg]);
+        pos<-sdp(1L:dim(gfx)[mrg]);
     }
 
     # position limit
