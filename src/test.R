@@ -21,6 +21,9 @@ proc.seq <- function(vcf, ped)
         ## set erronous genotype to NA
         gmx[mde$idx] <- NA
     })
+
+    ## possible memeory leak, remove it.
+    rm(vcf)
     dsg
 }
 
@@ -42,23 +45,25 @@ main <- function()
             if(file.exists(dst))
             {
                 cat(sprintf('%s -> %s: exists\n', whr, dst))
-                return(gi)
+                return(NULL)
             }
 
             ## fetch and process VCF
+            cat(sprintf('%s -> %s: created\n', whr, dst))
+
             vcf <- try(get.seq('wgs', ch, b1 - 5000L, b2 + 5000L))
             if(inherits(vcf, 'try-error'))
-                return(vcf)
+                return(NULL)
 
             dsg <- try(proc.seq(vcf, ped))
             if(inherits(dsg, 'try-error'))
-                return(dsg)
+                return(NULL)
             
             dsg <- within(dsg, {gid=gi; sym=n1; dsc=n2})
             saveRDS(dsg, dst)
-            cat(sprintf('%s -> %s: created\n', whr, dst))
-
-            gi
+            rm(dsg)
+            
+            NULL
         }, chr, bp1, bp2, gid, sym, fnm, SIMPLIFY = F)
     })
 
