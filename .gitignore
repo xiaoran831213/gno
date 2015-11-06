@@ -11,3 +11,15 @@
 # produced vignettes
 vignettes/*.html
 vignettes/*.pdf
+
+# dat
+dat
+
+# hidden files
+.*
+
+# emacs backups
+*~
+
+# wgs
+wgs

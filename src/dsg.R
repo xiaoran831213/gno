@@ -3,13 +3,76 @@ source('src/generics.R')
 
 ## generics
 
-gnotyp <- function(x = NULL, ssn = NULL, map = NULL, gmx = NULL)
+## pick or show subjects of a data
+sbj <- function(gno, ...) UseMethod("sbj")
+
+gmp <- function(gno, ...) UseMethod("gmp")
+
+## calculate minor allele frequency
+maf <- function(gno, ...) UseMethod("maf")
+
+## genotype statistics
+stt <- function(gno, ...) UseMethod("stt")
+mkMis <- function(gno, ...) UseMethod("mkMis")
+fxMaf <- function(gno, ...) UseMethod("fxMaf")
+rmDgr <- function(gno, ...) UseMethod("rmDgr")
+imp <- function(gno, ...) UseMethod("imp")
+
+## constructor
+dosage <- function(x = NULL, gmp = NULL, gmx = NULL)
 {
     if(is.null(x))
-        x <- list(ssn = ssn, map = map, gmx = gmx)
-    structure(x, class = c('gnotyp', 'list'))
+    {
+        x <- list(gmp = gmp, gmx = gmx)
+    }
+    structure(x, class = c('dosage', 'list'))
 }
 
+str.dosage <- function(dsg, ...)
+{
+    with(
+        dsg,
+    {
+        gmp = sprintf(
+        "gmp: %s ~ %s",
+        with(head(gmp, 1), sprintf('%s:%d-%d', chr, bp1, bp2)),
+        with(tail(gmp, 1), sprintf('%s:%d-%d', chr, bp1, bp2)))
+
+        sbj = sprintf(
+        "sbj: %s... %s",
+        paste(head(colnames(gmx)), collapse=" "),
+        paste(tail(colnames(gmx)), collapse=" "))
+        
+        gvr = sprintf(
+        "gvr: %s... %s",
+        paste(head(rownames(gmx)), collapse=" "),
+        paste(tail(rownames(gmx)), collapse=" "))
+        
+        dim = sprintf(
+        "num.gvr = %d, num.sbj = %d",
+        nrow(gmx), ncol(gmx))
+        paste(gmp, sbj, gvr, dim, "\n", sep = "\n")        
+    })
+    
+}
+
+print.dosage <- function(dsg, ...)
+{
+    with(
+        dsg,
+    {
+        if(nrow(gmp) < 20L)
+            print.data.frame(gmp)
+        else
+        {
+            dfr <- rbind(
+                as.matrix(head(gmp)),
+                rep('.', ncol(gmp)),
+                as.matrix(tail(gmp)))
+            print(dfr, right = T, quote = F)
+        }
+    })
+}
 
 maf.dosage <- function(dsg)
 {
@@ -18,12 +81,14 @@ maf.dosage <- function(dsg)
 
 maf.matrix <- function(gmx)
 {
-    rowMeans(gmx, na.rm = T) / 2L
+    maf <- rowMeans(gmx, na.rm = T) / 2L
+    pmin(maf, 1-maf)
 }
 
 maf.vector <- function(gvt)
 {
-    mean(gvt, na.rm = T) / 2L
+    maf <- mean(gvt, na.rm = T) / 2L
+    min(maf, 1-maf)
 }
 
 ## randomly make missing values in genotype matrix
@@ -42,10 +107,10 @@ mkMis.dosage<-function(dsg, frq, val=NA)
 .stt.itm <- list('N0', 'N1', 'N2', 'NN')
 stt.vector <- function(gvt, nm = TRUE)
 {
-    c(n0 = sum(g == 0L, na.rm = T),     # 1.Homo-major
-      n1 = sum(g == 1L, na.rm = T),     # 2.Hete
-      n2 = sum(g == 2L, na.rm = T),     # 3.Homo-minor
-      nn = sum(is.na(g)))              # 4.missing
+    c(n0 = sum(gvt == 0L, na.rm = T),     # 1.Homo-major
+      n1 = sum(gvt == 1L, na.rm = T),     # 2.Hete
+      n2 = sum(gvt == 2L, na.rm = T),     # 3.Homo-minor
+      nn = sum(is.na(gvt)))               # 4.missing
 }
 
 ## get genotype counts, only works for biallelic dosage data for now.
@@ -53,11 +118,13 @@ stt.matrix <- function(gmx)
 {
     ## variant id
     dnm <- dimnames(gmx)
-    vid <- if(is.na(dnm)) NULL else dnm[mrg]
+    vid <- dimnames(gmx)[[1]]
 
     ## statistics
-    ret <- apply(gmx, 1L, stt.vector)
-    dimnames(ret) <- list(itm=.stt.itm, vid=vid)
+    ret <- cbind(
+        t(apply(gmx, 1L, stt.vector)),
+        maf = maf(gmx))
+    ##dimnames(ret) <- list(vid=vid, itm=.stt.itm)
     ret
 }
 stt.dosage <- function(dsg)
@@ -149,15 +216,27 @@ sbj.dosage <- function(dsg, who = NULL)
     }
 }
 
-str.dosage <- function(dsg)
+gvr.dosage <- function(dsg, who = NULL)
 {
-    with(gno, sprintf('%s %2s:%-9d - %9d', ssn, chr, bp1, bp2))
+    if(is.null(who))
+    {
+        with(dsg, rownames(gmx))
+    }
+    else
+    {
+        who <- unlist(who)
+        if(is.character(who))
+            within(dsg, gmx <- gmx[match(who, rownames(gmx)), ,drop = F])
+        else
+            within(dsg, gmx <- gmx[who, , drop = F])
+    }
 }
 
-print.dosage <- function(dsg)
+gmp.dosage <- function(dsg)
 {
-    print(str.dosage(dsg))
+    with(dsg, gmp)
 }
+
 
 plot.dosage <- function(dsg, ...)
 {
