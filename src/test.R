@@ -32,6 +32,7 @@ main <- function()
 {
     ped <- ped.load("dat/all.ped")
     gen <- gls.load()
+    gen <- subset(gen, chr < 24)
     dst <- ("dat/dsg")
     
     ## process the sequence
@@ -44,25 +45,27 @@ main <- function()
             whr <- sprintf('%2d:%9d-%9d', ch, b1, b2)
             if(file.exists(dst))
             {
-                cat(sprintf('%s -> %s: exists\n', whr, dst))
+                cat(sprintf('%s -> %s: exists.\n', whr, dst))
                 return(NULL)
             }
 
             ## fetch and process VCF
-            cat(sprintf('%s -> %s: created\n', whr, dst))
-
+            cat(sprintf('%s -> %s: extracting', whr, dst))
+            
             vcf <- try(get.seq('wgs', ch, b1 - 5000L, b2 + 5000L))
             if(inherits(vcf, 'try-error'))
                 return(NULL)
 
+            cat(', processing')
             dsg <- try(proc.seq(vcf, ped))
             if(inherits(dsg, 'try-error'))
                 return(NULL)
             
             dsg <- within(dsg, {gid=gi; sym=n1; dsc=n2})
             saveRDS(dsg, dst)
-            rm(dsg)
-            
+
+            cat(', done.\n')
+            rm(dsg, vcf)
             NULL
         }, chr, bp1, bp2, gid, sym, fnm, SIMPLIFY = F)
     })
@@ -71,4 +74,3 @@ main <- function()
     names(ret) <- gen$gen
     ret
 }
-
