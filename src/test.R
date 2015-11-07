@@ -39,9 +39,9 @@ main <- function()
     ret <- with(
         gen,
     {
-        mapply(function(ch, b1, b2, gi, n1, n2)
+        mapply(function(sn, ch, b1, b2, gi, n1, n2, ds)
         {
-            dst <- file.path('dat/dsg', sprintf("%08X.rds", gi))
+            dst <- file.path('dat/dsg', sprintf("%s.rds", sn))
             whr <- sprintf('%2d:%9d-%9d', ch, b1, b2)
             if(file.exists(dst))
             {
@@ -61,13 +61,13 @@ main <- function()
             if(inherits(dsg, 'try-error'))
                 return(NULL)
             
-            dsg <- within(dsg, {gid=gi; sym=n1; dsc=n2})
+            dsg <- within(dsg, {gid=gi; smb=n1; fnm=n2; ifo=ds})
             saveRDS(dsg, dst)
 
             cat(', done.\n')
             rm(dsg, vcf)
             NULL
-        }, chr, bp1, bp2, gid, sym, fnm, SIMPLIFY = F)
+        }, rownames(gen), chr, bp1, bp2, gid, smb, fnm, ifo, SIMPLIFY = F)
     })
 
     ## return

@@ -15,7 +15,9 @@ get.seq <- function(vcf.dir, chr, bp1, bp2, ssn = NA, gtp = 'GT')
         which = rng)
 
     tbx <- TabixFileList(dir(vcf.dir, 'vcf.gz$', full.names = T))
-    readVcf(tbx[[sprintf("c%02d.vcf.gz", chr)]], 'hg38', param = svp)
+    suppressMessages(
+        readVcf(
+            tbx[[sprintf("c%02d.vcf.gz", chr)]], 'hg38', param = svp))
 }
 
 ## convert vcf GT to dosage
