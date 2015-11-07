@@ -15,7 +15,7 @@ get.seq <- function(vcf.dir, chr, bp1, bp2, ssn = NA, gtp = 'GT')
         which = rng)
 
     tbx <- TabixFileList(dir(vcf.dir, 'vcf.gz$', full.names = T))
-    suppressMessages(
+    suppressWarnings(
         readVcf(
             tbx[[sprintf("c%02d.vcf.gz", chr)]], 'hg38', param = svp))
 }
