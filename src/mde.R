@@ -1,9 +1,10 @@
-library(VariantAnnotation)
 source('src/ped.R')
 
 ## check mendilian error for vcf format
 MDE <- function(vcf, ped)
 {
+    suppressPackageStartupMessages(library(VariantAnnotation, warn.conflicts = F, quietly = T))
+
     ## pick out families
     ped <- ped.nuclear(ped)
 

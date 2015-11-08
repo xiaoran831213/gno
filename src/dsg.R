@@ -1,4 +1,3 @@
-source('src/utl.R')
 source('src/generics.R')
 
 ## generics
