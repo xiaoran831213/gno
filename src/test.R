@@ -1,3 +1,4 @@
+#!/usr/bin/env Rscript
 source('src/ped.R')
 source('src/mde.R')
 source('src/vcf.R')
@@ -74,3 +75,55 @@ main <- function()
     names(ret) <- gen$gen
     ret
 }
+
+gno.ext <- function()
+{
+    library(argparser)
+    p <- arg_parser('genome extractor.')
+    p <- add_argument(
+        p, '--sub',
+        help = paste(
+            "R boolean syntex to take a subset of features from the table:",
+            "\tchr: chromosome",
+            "\tbp1: starting basepair",
+            "\tbp2: ending basepair",
+            "\tgid: gene id",
+            "\tsmb: symbol (short name)",
+            "\tfnm: full name",
+            "\tifo: other informations"),
+        default = "TRUE")
+    p <- add_argument(
+        p, '--rng',
+        help = paste(
+            "range of subscripts to further select from the above subset,",
+            "using format 'start,end'."),
+            default='')
+    p <- add_argument(
+        p, '--dst', help = 'where to place extract features.',
+        default = '.')
+    p <- add_argument(
+        p, '--wgs', help = 'where to look for WGS files, in VCF format.',
+        default="")
+    p <- add_argument(
+        p, '--ped', help = 'path to the pedigree file.',
+        default="")
+
+    argv <- commandArgs(trailingOnly = TRUE)
+    if(length(argv) > 0)
+    {
+        opt <- parse_args(p, argv)
+        print(opt)
+        
+        with(
+            opt,
+        {
+            syntex <- sprintf('subset(gls.load()[:], %s)', sub, )
+            rng <- as.integer(unlist(strsplit(n.s, ',')))
+            ftr <- gls.load()[rng, ]
+
+        })
+        cat('xt: success\n')
+    }
+}
+
+cml.mix()
