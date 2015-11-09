@@ -1,7 +1,7 @@
 ## load gene list
 gls.load <- function(recache = FALSE)
 {
-    cache <- '.genome.features.rds'
+    cache <- '.gen.rds'
     
     ## try cached gene list first
     if(file.exists(cache) && !recache)
@@ -40,6 +40,7 @@ gls.load <- function(recache = FALSE)
         ftr,
     {
         data.frame(
+            ssn = sprintf('G%04X', 1L:nrow(ftr)),
             chr = sapply(chromosome, chr2num, USE.NAMES = F),
             bp1 = as.integer(start),
             bp2 = as.integer(end),
@@ -52,7 +53,7 @@ gls.load <- function(recache = FALSE)
             stringsAsFactors = F)
     })
     ftr <- na.omit(ftr)
-    rownames(ftr) <- sprintf('G%04X', 1L:nrow(ftr))
+    rownames(ftr) <- ftr$ssn
     saveRDS(ftr, cache)
     ftr
 }

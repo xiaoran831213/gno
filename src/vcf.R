@@ -3,8 +3,9 @@ source('src/dsg.R')
 ## get sequence
 get.seq <- function(vcf.dir, chr, bp1, bp2, ssn = NA, gtp = 'GT')
 {
-    suppressPackageStartupMessages(library(
-        VariantAnnotation, warn.conflicts = F, quietly = T))
+    sink('/dev/null', type = 'outcome')
+    library(VariantAnnotation, warn.conflicts = F, quietly = T)
+    sink()
 
     rng <- GRanges(
         seqnames = sprintf("%d", chr),
@@ -18,7 +19,7 @@ get.seq <- function(vcf.dir, chr, bp1, bp2, ssn = NA, gtp = 'GT')
 
     tbx <- TabixFileList(dir(vcf.dir, 'vcf.gz$', full.names = T))
     vgz <- tbx[[sprintf("c%02d.vcf.gz", chr)]]
-
+    
     sink('/dev/null')
     vcf <- try(readVcf(vgz, 'hg38', param = svp), silent = T)
     sink()
@@ -28,8 +29,9 @@ get.seq <- function(vcf.dir, chr, bp1, bp2, ssn = NA, gtp = 'GT')
 ## convert vcf GT to dosage
 vcf2dsg <- function(vcf)
 {
-    suppressPackageStartupMessages(library(
-        VariantAnnotation, warn.conflicts = F, quietly = T))
+    sink('/dev/null', type = 'outcome')
+    library(VariantAnnotation, warn.conflicts = F, quietly = T)
+    sink()
 
     ## variant map & genotype matrix
     gmp <- as.data.frame(rowRanges(vcf))
@@ -48,7 +50,7 @@ vcf2dsg <- function(vcf)
 
     ## convert vcf.GT  format to dosage format 
     ## save the # of variants and subjects
-    N <- dim(gmx)[1];
+    N <- dim(gmx)[1]
     M <- dim(gmx)[2]
 
     ## "a1|a2" ==> {0, 1, 2}

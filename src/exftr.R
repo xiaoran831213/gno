@@ -25,7 +25,6 @@ proc.seq <- function(vcf, ped = NULL)
         dsg$mde <- mde
         dsg$gmx[mde$idx] <- NA
     }
-
     dsg
 }
 
@@ -140,9 +139,6 @@ cml <- function(...)
     {
         ## get feature table first
         tab <- gls.load()
-        tab <- data.frame(
-            ssn = rownames(tab), tab,
-            stringsAsFactors = F)
         
         ## write subsetting script
         if(!is.na(sub)) tab <- eval(parse(
@@ -166,5 +162,5 @@ cml <- function(...)
     do.call(main, args = opt)
 }
 
-cml()
+##cml()
 ## cml('--rng', '10,20', '--wgs', 'wgs', '--dst', 'd1', '--ovr', 'T', '--ped', 'dat/all.ped')
