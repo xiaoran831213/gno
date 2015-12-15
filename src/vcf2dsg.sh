@@ -12,19 +12,18 @@ function help()
 
     echo "Options:"
 
-    t="    "
-    echo "$t-s source *.vcf or *.vcf.gz file to read from."
-    echo "$t-- by default it is the standard input."
+    echo "  -s source *.vcf or *.vcf.gz file to read from."
+    echo "  by default it is the standard input."
     echo
     
-    echo "$t-d target to write the dosage dataset."
-    echo "$t-- by default the standard output is chosen."
+    echo "  -d target to write the dosage dataset."
+    echo "  by default the standard output is chosen."
     echo
     
-    echo "$t-e skip existing output file."
+    echo "  -e skip existing output file."
     echo
 
-    echo "$t-h show this help."
+    echo "  -h show this help."
     echo
 }
 
@@ -48,9 +47,9 @@ function opts()
 ## argument check and report
 function args()
 {
-    echo "SRC=$src"
-    echo "DST=$dst"
-    echo "SKE=$ske"
+    echo "SRC=$src" >&2
+    echo "DST=$dst" >&2
+    echo "SKE=$ske" >&2
 
     ## check the srouce file
     if [ ! -e "$src" ]; then
@@ -100,10 +99,19 @@ function main()
     zcat $tmp/map.txt.gz | cut -f3 | gzip > $tmp/vid.txt.gz
 
     ## pack everything
-    dst_dir=$(dirname $dst)
-    cd $tmp
-    tar -zcf../$ *.txt.gz "$dst"
-    echo "xt: success"
+    ## remember absolute path of the output if its not STDOUT
+    if [ $dst != /dev/stdout ]; then
+	dst=$(readlink -f "$dst") 
+    fi
+
+    ## pack the files without leading path
+    ## it is important to use sub-console to prevent the standard
+    ## output mistakenly linking to a file in 'tmp/'
+    (cd $tmp; tar -zcf "$dst" *.txt.gz)
+    
+    ## clean up
+    rm -rf $tmp
+    echo "xt: success" >&2
 }
 
 opts $@
