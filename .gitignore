@@ -21,5 +21,6 @@ dat
 # emacs backups
 *~
 
-# wgs
+# wgs, raw data
 wgs
+raw
