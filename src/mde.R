@@ -1,4 +1,7 @@
 source('src/ped.R')
+source('src/mde.R')
+source('src/vcf.R')
+source('src/gls.R')
 
 ## check mendilian error for vcf format
 MDE <- function(vcf, ped)
@@ -71,4 +74,26 @@ MDE <- function(vcf, ped)
 
     ## return mendilian error structure
     structure(list(err=err, idx=idx), class = c('MDE', 'list'))
+}
+
+## process one sequence of vcf, return dosage data
+proc.seq <- function(vcf, ped)
+{
+    ## subject id must be in pedigree
+    ## check mendilian errors if pedigree is available,
+    sid <- sort(intersect(samples(header(vcf)), rownames(ped)))
+    vcf <- vcf[, sid]
+    ped <- ped.clr(ped[sid, ])
+    mde <- MDE(vcf, ped)
+    
+    ## make dosage data
+    dsg <- vcf2dsg(vcf)
+
+    ## if ME check is done, set the erronous genotype to NA
+    if(exists('mde'))
+    {
+        dsg$mde <- mde
+        dsg$gmx[mde$idx] <- NA
+    }
+    dsg
 }
