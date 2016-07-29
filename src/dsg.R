@@ -42,7 +42,7 @@ dosage <- function(x = NULL, chr = NULL, bp1= NULL, bp2 = NULL, map = NULL, sbj 
     }
     else if(is.character(x))            # read from file
     {
-        x <- readRDS(x)
+        x <- within(readRDS(x), rds <- x)
     }
 
     ## overwrite members
@@ -59,7 +59,8 @@ dosage <- function(x = NULL, chr = NULL, bp1= NULL, bp2 = NULL, map = NULL, sbj 
     if(!is.null(gmx))
         x$gmx <- gmx
 
-    x$.vw <- I
+    ## the view of the data
+    x$view <- I                          
     structure(x, class = c('dosage', 'list'))
 }
 
@@ -103,50 +104,61 @@ gvr.dosage <- function(dsg, who = NULL)
 ## * ---------- extend default R generics ---------- * ##
 length.dosage <- function(dsg, ...) length(dsg$gmx)
 
-dim.dosage <- function(dsg, ...) dim(with(dsg, .vw(gmx)))
+dim.dosage <- function(dsg, ...) with(dsg, dim(view(gmx))) #
 
 t.dosage <- function(dsg, ...)
 {
     ## change the view point of the data
-    dsg[['.vw']] <- ifelse(identical(dsg[['.vw']], I), t, I)
-    dsg
+    within(dsg, view <- if(identical(view, I)) t else I)
 }
 
 as.matrix.dosage <- function(dsg, ...)
 {
-    with(dsg, .vw(gmx))
+    with(dsg, view(gmx))
 }
 
 as.vector.dosage <- function(dsg, ...)
 {
-    as.integer(with(dsg, .vw(gmx)))
+    as.integer(with(dsg, view(gmx)))
 }
 
 `[.dosage` <- function(dsg, i = NULL, j = NULL, ..., drop = FALSE)
 {
     d <- drop
-    v <- with(dsg, .vw(gmx))
 
-    if(is.null(i))
+    ## consider transposed genomic matrix
+    if(identical(dsg$view, t))
     {
-        if(is.null(j))
-            v[, , drop = d]
-        else
-            v[, j, drop = d]
+        k <- j
+        j <- i
+        i <- k
     }
-    else
+
+    ## pick out variants and subjects
+    dsg <- within(dsg,
     {
-        if(is.null(j))
-            v[i, , drop = d]
+        if(is.null(i))
+        {
+            if(is.null(j))
+                gmx <- gmx[ ,  , drop = d]
+            else
+                gmx <- gmx[ , j, drop = d]
+        }
         else
-            v[i, j, drop = d]
-    }
+        {
+            if(is.null(j))
+                gmx <- gmx[i,  , drop = d]
+            else
+                gmx <- gmx[i, j, drop = d]
+        }
+    })
+    dsg
 }
 
-str.dosage <- function(dsg, ...)
+str.dosage <- function(x, ...)
 {
     with(
-        dsg,
+        x,
     {
         map = sprintf(
         "map: %s ~ %s",
@@ -170,12 +182,12 @@ str.dosage <- function(dsg, ...)
     })
 }
 
-print.dosage <- function(dsg, ...)
+print.dosage <- function(x, ...)
 {
     with(
-        dsg,
+        x,
     {
-        if(nrow(map) < 20L)
+        if(nrow(map) < 20)
             print.data.frame(map)
         else
         {
@@ -185,16 +197,17 @@ print.dosage <- function(dsg, ...)
                 as.matrix(tail(map)))
             print(dfr, right = T, quote = F)
         }
+
+        cat(paste(c('ngv', 'nsb'), c(ngv(x), nsb(x)), sep='='), '\n')
     })
 }
 
-is.na.dosage <- function(dsg, ...) is.na(dsg$gmx)
-
+is.na.dosage <- function(x, ...) is.na(x$gmx)
 ## * ----------        (end extend)        ---------- * ##
 
-maf.dosage <- function(dsg)
+maf.dosage <- function(x)
 {
-    with(dsg, maf.matrix(gmx))
+    with(x, maf.matrix(gmx))
 }
 
 maf.matrix <- function(gmx)
@@ -202,6 +215,7 @@ maf.matrix <- function(gmx)
     maf <- rowMeans(gmx, na.rm = T) / 2L
     pmin(maf, 1-maf)
 }
+maf.Matrix <- maf.matrix
 
 maf.vector <- function(gvt)
 {
@@ -210,16 +224,17 @@ maf.vector <- function(gvt)
 }
 
 ## randomly make missing values in genotype matrix
-mkMis.matrix<-function(gmx, frq, val=NA)
+mkMis.matrix <- function(gmx, frq, val=NA)
 {
     gmx[sample.int(length(gmx), length(gmx) * frq)] <- val
     gmx
 }
+mkMis.Matrix <- mkMis.matrix
 
 ## randomly make missing values in genotype matrix
-mkMis.dosage<-function(dsg, frq, val=NA)
+mkMis.dosage<-function(x, frq, val=NA)
 {
-    within(dsg, gmx <- mkMis.matrix(gmx))
+    within(x, gmx <- mkMis.matrix(gmx))
 }
 
 .stt.itm <- list('N0', 'N1', 'N2', 'NN')
@@ -245,9 +260,11 @@ stt.matrix <- function(gmx)
     ##dimnames(ret) <- list(vid=vid, itm=.stt.itm)
     ret
 }
-stt.dosage <- function(dsg)
+stt.Matrix <- stt.matrix
+
+stt.dosage <- function(x)
 {
-    stt.matrix(dsg$gmx)
+    stt.matrix(x$gmx)
 }
 
 ## remove degenerated variants
@@ -261,9 +278,10 @@ rmDgr.matrix <- function(gmx)
     
     gmx[i, , drop = F]
 }
-rmDgr.dosage <- function(dsg)
+rmDgr.Matrix <- rmDgr.matrix
+rmDgr.dosage <- function(x)
 {
-    within(dsg, gmx <- rmDgr.matrix(gmx))
+    within(x, gmx <- rmDgr.matrix(gmx))
 }
 
 ## fix variants whoes MAF is greater than 0.5 by flipping their coding
@@ -280,9 +298,9 @@ fxMAf.matrix <- function(gmx)
     gmx
 }
 
-fxMAf.dosage <- function(dsg)
+fxMAf.dosage <- function(x)
 {
-    within(dsg, gmx <- fxMAF.matrix(gmx))
+    within(x, gmx <- fxMAF.matrix(gmx))
 }
 
 ## guess missing values based on the frequency of know values
@@ -297,7 +315,6 @@ impute.vector <- function(gvt)
     gvt
 }
 
-## guess missing values based on the frequency of know values
 impute.matrix <- function(gmx)
 {
     ## calculate genotype statistics
@@ -311,24 +328,25 @@ impute.matrix <- function(gmx)
     }
     gmx
 }
+impute.Matrix <- impute.matrix
 
-impute.dosage <- function(dsg)
+impute.dosage <- function(x)
 {
-    within(dsg, gmx <- impute.matrix(gmx))
+    within(x, gmx <- impute.matrix(gmx))
 }
 
-map.dosage <- function(dsg)
+map.dosage <- function(x)
 {
-    with(dsg, map)
+    with(x, map)
 }
 
-plot.dosage <- function(dsg, ...)
+plot.dosage <- function(x, ...)
 {
-    x <- dsg$map$bp1
+    x <- x$map$bp1
 
     # dummy plot to lay the background
     plot(x=0, y=0, xlim = range(x), ylim=c(0, 2))
-    apply(dsg$gmx, 1L, function(y)
+    apply(x$gmx, 1L, function(y)
     {
         lines(x, y, ylim=ylim, xaxt="n", yaxt="n", ylab="", xlab="", ...)
     })

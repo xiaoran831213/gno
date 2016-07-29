@@ -233,3 +233,25 @@ hlp.pwr <- function(rpt, t = 0.05, ret=3)
     
     lapply(p.val, function(p) sum(p < t) / n.itr)
 }
+
+toBcfRgn <- function(gmp, file = NULL)
+{
+    names(gmp) <- toupper(names(gmp))
+    hdr <- c('CHR', 'POS')
+    if('BP1' %in% names(gmp))
+        sel = c('CHR', 'BP1', 'BP2')
+    else if('POS' %in% names(gmp))
+    {
+        sel = c('CHR', 'POS')
+        hdr <- c(hdr, 'POS_TO')
+    }
+    else
+        stop('unrecognized map header.')
+    rgn <- gmp[, sel]
+    names(rgn) <- hdr
+    
+    if(!is.null(file))
+        write.table(rgn, file, quote=F, sep='\t', row.names=F, col.names=F)
+    names(rgn) <- c('CHROM', 'POS', 'POS_TO')
+    invisible(rgn)
+}

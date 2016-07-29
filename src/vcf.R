@@ -1,68 +1,109 @@
-source('src/dsg.R')
-
-## get sequence
-get.seq <- function(vcf.dir, chr, bp1, bp2, ssn = NA, gtp = 'GT')
+.vcf.rng <- function(chr = NULL, bp1 = NULL, bp2 = NULL, wnd = 0L)
 {
-    sink('/dev/null', type = 'outcome')
-    library(VariantAnnotation, warn.conflicts = F, quietly = T)
-    sink()
+    if(is.null(chr))
+        return("")
 
-    rng <- GRanges(
-        seqnames = sprintf("%d", chr),
-        ranges = IRanges(bp1, bp2, names = ssn))
-    
-    svp <- ScanVcfParam(
-        fixed = 'ALT',
-        info = NA,
-        geno = gtp,
-        which = rng)
+    if(chr == 23L)
+        chr = 'X'
+    if (chr == 24L)
+        chr = 'Y'
 
-    tbx <- TabixFileList(dir(vcf.dir, 'vcf.gz$', full.names = T))
-    vgz <- tbx[[sprintf("c%02d.vcf.gz", chr)]]
-    
-    sink('/dev/null')
-    vcf <- try(readVcf(vgz, 'hg38', param = svp), silent = T)
-    sink()
-    vcf
+    if(is.null(bp1))
+        bp1 <- 0L
+    else
+        bp1 <- bp1 - wnd
+    if(is.null(bp2))
+        bp2 <- .Machine$integer.max
+    else
+        bp2 <- bp2 - wnd
+
+    return(sprintf('-r %s:%s-%s', chr, bp1, bp2))
 }
 
-## convert vcf GT to dosage
-vcf2dsg <- function(vcf)
+.vcf.map <- function(vcf, chr = NULL, bp1 = NULL, bp2 = NULL, wnd = 5000L, stderr = FALSE)
 {
-    sink('/dev/null', type = 'outcome')
-    library(VariantAnnotation, warn.conflicts = F, quietly = T)
-    sink()
+    rng <- .vcf.rng(chr, bp1, bp2, wnd)
+    cmd <- "bcftools query -f '%CHROM %POS %ID %REF %ALT\\n'"
+    cmd <- paste(cmd, rng, vcf)
+    if(!stderr)
+        cmd <- paste(cmd, '2>/dev/null')
 
-    ## variant map & genotype matrix
-    gmp <- as.data.frame(rowRanges(vcf))
-    gmx <- geno(vcf)$GT
+    sed<-"sed \'s/\\(^X\\)/23/; s/\\(^Y\\)/24/\'"
+    cmd<-paste(cmd, sed, sep= "|")
     
-    ## variant id and subject id
-    vid <- rownames(gmx)
-    sid <- colnames(gmx)
+    pip<-pipe(cmd, "r")
+    txt <- readLines(pip)
+    close(pip)
 
-    ## drop bioconductor structure for the variant map
-    gmp <- with(gmp, data.frame(
-        vid = vid,
-        chr=seqnames, bp1=start, bp2=end,
-        ref=REF, alt=sapply(gmp$ALT, toString),
-        stringsAsFactors = F))
+    if(length(txt) == 0L)               # empty map
+        map <- data.frame(
+            CHR = integer(0), POS = integer(0), UID = character(0), REF = character(0),
+            ALT = character(0), stringsAsFactors = FALSE)
+    else
+    {
+        map <- read.table(text = txt, header = F, as.is = T)
+        colnames(map) <- c("CHR", "POS", "UID", "REF", "ALT")
+        
+        rownames(map) <- sprintf('V%04X', 1L:nrow(map))
+    }
+    map
+}
 
-    ## convert vcf.GT  format to dosage format 
-    ## save the # of variants and subjects
-    N <- dim(gmx)[1]
-    M <- dim(gmx)[2]
+.vcf.sbj <- function(vcf)
+{
+    cmd <- paste("bcftools query -l", vcf)
+    pip <- pipe(cmd, "r");
+    sbj <- scan(file = pip, what = " ", quiet = T)
+    close(pip);
+    sbj
+}
 
-    ## "a1|a2" ==> {0, 1, 2}
-    gmx <- sapply(strsplit(gmx, '|'), `[`, c(1L,3L))
-    gmx[gmx=='.'] <- NA
-    gmx <- as.integer(gmx)
-    dim(gmx) <- c(2L, N * M)
-    gmx[gmx > 0L] <- 1L
-    gmx <- colSums(gmx)
-    dim(gmx) <- c(N, M)
-    dimnames(gmx) <- list(vid=vid, sid=sid)
+.vcf.gvt <- function(vcf, chr = NULL, bp1 = NULL, bp2 = NULL, wnd = 5000L, stderr = FALSE)
+{
+    rng <- .vcf.rng(chr, bp1, bp2, wnd)
+    cmd<-"bcftools query -f '[%GT ]\\n'";
+    cmd<-paste(cmd, rng);
+    cmd<-paste(cmd, vcf);
+    if(!stderr)
+        cmd <- paste(cmd, '2>/dev/null')
+    ## construct sed filter command
+    sed<-"sed \' s/0[|/]0/0/g; s/[1-9][|/]0/1/g; s/0[|/][1-9]/1/g; s/[1-9][|/][1-9]/2/g; s/\\.[|/]./3/g; s/.[|/]\\./3/g\'"
+    
+    ## the final command
+    cmd<-paste(cmd, sed, sep="|");
+    pip<-pipe(cmd, "r");
+    gvt<-scan(pip, what=0L, na.strings = '3', quiet=T)
+    close(pip)
+    gvt
+}
 
-    ## construct dosage data structure
-    dosage(gmp=gmp, gmx=gmx)
+## read vcf data, convert it to dosage
+vcf2dsg <- function(vcf, chr = NULL, bp1 = NULL, bp2 = NULL, wnd = 5000L, smb = NULL, fnm = NULL)
+{
+    ## read genome map
+    map <- .vcf.map(vcf, chr, bp1, bp2)
+    gvr <- rownames(map)
+    
+    ## -------- get subject id from VCF header -------- #
+    sbj <- .vcf.sbj(vcf)
+    
+    ## -------- get genotype matrix -------- #
+    gmx<-matrix(
+        .vcf.gvt(vcf, chr, bp1, bp2, wnd),
+        nrow=length(gvr), ncol=length(sbj), byrow=T, dimnames=list(gvr=gvr, sbj=sbj))
+    
+    ## the output
+    within(
+        list(),
+    {
+        chr <- as.integer(chr)
+        bp1 <- as.integer(bp1)
+        bp2 <- as.integer(bp2)
+        wnd <- as.integer(wnd)
+        map <- map
+        gmx <- gmx
+        vcf <- vcf
+        smb <- smb
+        fnm <- fnm
+    })
 }
