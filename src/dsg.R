@@ -240,48 +240,67 @@ mkMis.dosage<-function(x, frq, val=NA)
 .stt.itm <- list('N0', 'N1', 'N2', 'NN')
 stt.vector <- function(gvt, nm = TRUE)
 {
-    c(n0 = sum(gvt == 0L, na.rm = T),     # 1.Homo-major
-      n1 = sum(gvt == 1L, na.rm = T),     # 2.Hete
-      n2 = sum(gvt == 2L, na.rm = T),     # 3.Homo-minor
-      nn = sum(is.na(gvt)))               # 4.missing
+    c(sum(gvt == 0L, na.rm = T),     # 1.Homo-major
+      sum(gvt == 1L, na.rm = T),     # 2.Hete
+      sum(gvt == 2L, na.rm = T),     # 3.Homo-minor
+      sum(is.na(gvt)))               # 4.missing
 }
 
 ## get genotype counts, only works for biallelic dosage data for now.
 stt.matrix <- function(gmx)
 {
-    ## variant id
-    dnm <- dimnames(gmx)
-    vid <- dimnames(gmx)[[1]]
-
     ## statistics
-    ret <- cbind(
-        t(apply(gmx, 1L, stt.vector)),
-        maf = maf(gmx))
-    ##dimnames(ret) <- list(vid=vid, itm=.stt.itm)
-    ret
+    out <- matrix(0L, nrow(gmx), 4L)
+    for(i in 1L:nrow(gmx))
+    {
+        out[i,2] = sum(gmx[i,] == 1L, na.rm = T)     # 2.Hete
+        out[i,3] = sum(gmx[i,] == 2L, na.rm = T)     # 3.Homo-minor
+        out[i,4] = sum(is.na(gmx[i,]))               # 4.missing
+    }
+    out[,1] <- nrow(gmx) - rowSums(out[,2:4])
+    as.data.frame(
+        out,
+        col.names = c('N0', 'N1', 'N2', 'NN'))
 }
-stt.Matrix <- stt.matrix
+stt.Matrix <- function(gmx)
+{
+    ## statistics
+    ## avoid copying sparse matrix to the dense one
+    out <- data.frame(
+        N1 = rowSums(gmx == 1L, T),
+        N2 = rowSums(gmx == 2L, T),
+        NN = rowSums(is.na(gmx)))
+    out <- cbind(N0 = ncol(gmx) - rowSums(out), out)
+    out
+}
 
 stt.dosage <- function(x)
 {
     stt.matrix(x$gmx)
 }
 
-## remove degenerated variants
-rmDgr.matrix <- function(gmx)
+rmDgr.matrix <- function(gmx, ret = c(gmx, msk, idx), inv = FALSE)
 {
+    ret <- match.arg(ret, choices = c('gmx', 'msk', 'idx'))
     ## calculate genotype statistics
     s <- stt(gmx);
-    
+
     ## find variants not degenerated
-    i <- which(pmax.int(s[,'n0'], s[,'n1'], s[,'n2']) < ncol(gmx) - s[,'nn'])
-    
-    gmx[i, , drop = F]
+    m <- pmax.int(s[,1], s[,2], s[,3]) < ncol(gmx) - s[,4]
+    if(inv) i <- !m
+
+    switch(ret, gmx=gmx[m, , drop = F], msk=m, idx=which(m))
 }
 rmDgr.Matrix <- rmDgr.matrix
-rmDgr.dosage <- function(x)
+
+rmDgr.dosage <- function(dsg, ret = c('gmx', 'msk', 'idx'), inv = FALSE)
 {
-    within(x, gmx <- rmDgr.matrix(gmx))
+    within(dsg,
+    {
+        i <- rmDgr.matrix(gmx, ret = 'idx')
+        gmx <- gmx[i, , drop = FALSE]
+        map <- map[i, , drop = FALSE]
+    })
 }
 
 ## fix variants whoes MAF is greater than 0.5 by flipping their coding
@@ -318,13 +337,12 @@ impute.vector <- function(gvt)
 impute.matrix <- function(gmx)
 {
     ## calculate genotype statistics
-    cnt<-stt.matrix(gmx);
+    cnt <- stt(gmx)
     
     # guess missings for a variant, maintain type frequency
-    for(i in which(cnt[, 'nn'] > 0L))
+    for(i in which(cnt[, 4] > 0L))
     {
-        gmx[i, is.na(gmx[i,])] <-
-            sample.int(3L, cnt[i, 4L], T, cnt[i, 1L:3L]) - 1L
+        gmx[i, which(is.na(gmx[i,]))] <- sample.int(3L, cnt[i, 4], T, cnt[i, 1:3]) - 1L
     }
     gmx
 }
