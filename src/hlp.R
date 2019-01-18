@@ -1,8 +1,16 @@
 ## make data frame out of list of lists
 ## lol ---- the list of lists. each sub list represent a row
 ## in the data frame
-lol2tab <- function(lol)
+lol2tab <- function(lol, id.from=seq_along)
 {
+    if(!is.null(id.from))
+    {
+        lol <- mapply(function(i,l)
+        {
+            c(idx=i,l)
+        }, id.from(lol), lol)
+    }
+    
     ## create the list to hold columns
     val <- list()
 
@@ -28,6 +36,7 @@ lol2tab <- function(lol)
 
     ## turn column lists into column vectors, then data.frame
     val <- lapply(val, unlist)
+    
     val <- data.frame(val, stringsAsFactors = F)
     val
 }

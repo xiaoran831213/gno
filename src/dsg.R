@@ -6,19 +6,19 @@ sbj <- function(dsg, ...) UseMethod("sbj")
 gvr <- function(dsg, ...) UseMethod("gvr")
 
 ## number of subjects
-nsb <- function(dsg, ...) UseMethod("nsb")
+nsb <- function(dsg) UseMethod("nsb")
 
 ## number of genomic variants
-ngv <- function(dsg, ...) UseMethod("ngv")
+ngv <- function(dsg) UseMethod("ngv")
 
 ## get genomic map
-map <- function(dsg, ...) UseMethod("map")
+map <- function(dsg) UseMethod("map")
 
 ## calculate minor allele frequency
-maf <- function(dsg, ...) UseMethod("maf")
+maf <- function(dsg) UseMethod("maf")
 
 ## genotype statistics
-stt <- function(dsg, ...) UseMethod("stt")
+stt <- function(dsg) UseMethod("stt")
 
 ## make missing values
 mkMis <- function(dsg, ...) UseMethod("mkMis")
@@ -34,43 +34,83 @@ impute <- function(dsg, ...) UseMethod("impute")
 ## * -------- (end) -------- * ##
 
 ## constructor
-dosage <- function(x = NULL, chr = NULL, bp1= NULL, bp2 = NULL, map = NULL, sbj = NULL, gmx = NULL)
+dosage <- function(x = NULL, ...)
 {
     if(is.null(x))
-    {
         x <- list()
-    }
-    else if(is.character(x))            # read from file
-    {
-        x <- within(readRDS(x), rds <- x)
-    }
 
-    ## overwrite members
-    if(!is.null(chr))
-        x$chr <- chr
-    if(!is.null(bp1))
-        x$bp1 <- bp1
-    if(!is.null(bp2))
-        x$bp2 <- bp2
-    if(!is.null(map))
-        x$map <- map
-    if(!is.null(sbj))
-        x$sbj <- sbj
-    if(!is.null(gmx))
-        x$gmx <- gmx
+    if(is.character(x) && grepl('vcf.gz$', x))
+        x <- readVCF(x)
+
+    if(is.character(x) && grepl('.rds$', x))
+        x <- readRDS(x)
 
     ## the view of the data
-    x$view <- I                          
+    x$view <- I
+
     structure(x, class = c('dosage', 'list'))
 }
 
+readVCF <- function(vcf)
+{
+    library(vcfR)
+    library(Matrix)
+
+    ## load VCF
+    vc <-read.vcfR(vcf)
+    if(nrow(vc) == 0L)
+        stop('null genotype ', vcf)
+    gn <- sub('.vcf.gz', '', basename(vcf))
+    
+    ## extract non-synonymous variants
+    gt <- extract.gt(vc)
+
+    ## sample names, counts
+    sbj <- colnames(gt)
+    
+    ## genomic map
+    mp <- vcfR2tidy(vc, T, info_fields='.')$fix[, 1:5]
+    names(mp)[1] <- 'CHR'
+    ## chromosome map
+    cm <- 1:26
+    names(cm) <- c(1:22, 'X', 'Y', 'M', 'XY')
+    mp <- within(mp, CHR <- cm[CHR])
+
+    ## variant IDs
+    gvr <- sprintf('V%05X', 1L:nrow(mp))
+    
+    ## the GT to dosage dictionary.
+    dc <- c(
+        0L, 1L, 1L, 1L, 1L, 1L, 1L, 1L, 1L, 1L, 1L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L,
+        1L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 1L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L,
+        1L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 1L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L,
+        1L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 1L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L,
+        1L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 1L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L, 2L)
+    ## bi-allelic format to dosage format
+    gt <- as.integer(gsub('[/|]', '', gt))
+    gt <- dc[gt + 1L]
+    gt <- Matrix(gt, length(gvr), length(sbj), dimnames=list(gvr=gvr, sbj=sbj))
+    
+    rt <- within(list(),
+    {
+        map <- mp
+        gmx <- gt
+        bp1 <- tail(mp$POS, 1L)
+        bp0 <- head(mp$POS, 1L)
+        chr <- mp$CHR[1]
+        vcf <- vcf
+    })
+
+    invisible(rt)
+}
+
 ## number of subjects
-nsb.dosage <- function(dsg, ...) length(dimnames(dsg$gmx)$sbj)
+nsb.dosage <- function(x) ncol(x$gmx)
 
 ## number of genomic variants
-ngv.dosage <- function(dsg, ...) length(dimnames(dsg$gmx)$gvr)
+ngv.dosage <- function(x) nrow(x$gmx)
+ngv.matrix <- function(x) nrow(x)
 
-## list or pick out subject
 sbj.dosage <- function(dsg, who = NULL)
 {
     if(is.null(who))
@@ -87,6 +127,7 @@ sbj.dosage <- function(dsg, who = NULL)
 }
 
 ## list or pick out genomic variants
+gvr.default <- function(x) dimnames(x)$gvr
 gvr.dosage <- function(dsg, who = NULL)
 {
     if(is.null(who))
@@ -102,7 +143,7 @@ gvr.dosage <- function(dsg, who = NULL)
 }
 
 ## * ---------- extend default R generics ---------- * ##
-length.dosage <- function(dsg, ...) length(dsg$gmx)
+length.dosage <- function(dsg) length(dsg$gmx) #
 
 dim.dosage <- function(dsg, ...) with(dsg, dim(view(gmx))) #
 
@@ -216,6 +257,7 @@ maf.matrix <- function(gmx)
     pmin(maf, 1-maf)
 }
 maf.Matrix <- maf.matrix
+maf.dgCMatrix <- maf.matrix
 
 maf.vector <- function(gvt)
 {
@@ -237,7 +279,6 @@ mkMis.dosage<-function(x, frq, val=NA)
     within(x, gmx <- mkMis.matrix(gmx))
 }
 
-.stt.itm <- list('N0', 'N1', 'N2', 'NN')
 stt.vector <- function(gvt, nm = TRUE)
 {
     c(sum(gvt == 0L, na.rm = T),     # 1.Homo-major
@@ -257,7 +298,7 @@ stt.matrix <- function(gmx)
         out[i,3] = sum(gmx[i,] == 2L, na.rm = T)     # 3.Homo-minor
         out[i,4] = sum(is.na(gmx[i,]))               # 4.missing
     }
-    out[,1] <- nrow(gmx) - rowSums(out[,2:4])
+    out[,1] <- ncol(gmx) - rowSums(out[, 2:4, drop=F])
     as.data.frame(
         out,
         col.names = c('N0', 'N1', 'N2', 'NN'))
@@ -273,13 +314,14 @@ stt.Matrix <- function(gmx)
     out <- cbind(N0 = ncol(gmx) - rowSums(out), out)
     out
 }
+stt.dgCMatrix <- stt.Matrix
 
 stt.dosage <- function(x)
 {
     stt.matrix(x$gmx)
 }
 
-rmDgr.matrix <- function(gmx, ret = c(gmx, msk, idx), inv = FALSE)
+rmDgr.matrix <- function(gmx, ret = c('gmx', 'msk', 'idx'), inv = FALSE, ...)
 {
     ret <- match.arg(ret, choices = c('gmx', 'msk', 'idx'))
     ## calculate genotype statistics
@@ -292,8 +334,9 @@ rmDgr.matrix <- function(gmx, ret = c(gmx, msk, idx), inv = FALSE)
     switch(ret, gmx=gmx[m, , drop = F], msk=m, idx=which(m))
 }
 rmDgr.Matrix <- rmDgr.matrix
+rmDgr.dgCMatrix <- rmDgr.matrix
 
-rmDgr.dosage <- function(dsg, ret = c('gmx', 'msk', 'idx'), inv = FALSE)
+rmDgr.dosage <- function(dsg, ret = c('gmx', 'msk', 'idx'), inv = FALSE, ...)
 {
     within(dsg,
     {
